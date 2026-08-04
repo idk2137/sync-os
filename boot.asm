@@ -3,12 +3,58 @@ global start
 extern kernel_main
 
 start:
+    mov [BOOT_DRIVE], dl
+    xor ax, ax
+    mov es, ax
+    mov bx, 0x7E00      ; Załaduj z dysku prosto pod adres 0x7E00, nie robiąc dziury
+    mov dh, 16
+    mov dl, [BOOT_DRIVE]
+    call load_sectors
+
     cli
     lgdt [gdt_descriptor]
     mov eax, cr0
     or eax, 0x1
     mov cr0, eax
     jmp CODE_SEG:init_pm
+
+load_sectors:
+    mov ah, 0x02
+    mov al, dh               ; liczba sektorów do wczytania
+    mov ch, 0x00
+    mov cl, 0x02              ; zacznij od sektora 2
+    mov dh, 0x00
+    int 0x13
+    jc disk_error             ; błąd -> skocz do obsługi błędu
+    mov si, BOOT_MSG
+    call print_string_16
+    ret                        ; sukces -> wróć do miejsca wywołania (start:)
+
+disk_error:
+    mov si, DISK_ERROR_MSG
+    call print_string_16
+    jmp $                      ; błąd jest krytyczny, zatrzymaj się tu na stałe
+
+
+boot_msg:
+    mov si, BOOT_MSG
+    call print_string_16
+    ret
+
+
+print_string_16:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0E
+    int 0x10
+    jmp print_string_16
+.done:
+    ret
+
+BOOT_DRIVE db 0
+DISK_ERROR_MSG db 'Disk read error!', 0
+BOOT_MSG db 'Booting Sync OS...',0
 
 ; ---- GDT ----
 gdt_start:
