@@ -1,16 +1,13 @@
+#include "interrupt.h"
 
 int cursor_position = 0;
 int current_column = 0;
 
-void outb(unsigned short port, unsigned char value) {
-    asm volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
 void update_cursor(int position) {
-    outb(0x3D4, 0x0F);                          // wybierz rejestr "low byte"
-    outb(0x3D5, (unsigned char)(position & 0xFF));       // wyślij dolny bajt pozycji
-    outb(0x3D4, 0x0E);                          // wybierz rejestr "high byte"
-    outb(0x3D5, (unsigned char)((position >> 8) & 0xFF)); // wyślij górny bajt pozycji
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (unsigned char)(position & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
 void print(char *message, char color) {
@@ -31,32 +28,6 @@ void print(char *message, char color) {
   update_cursor(cursor_position);
 }
 
-void print_digit(int digit, char color) {
-  char c = '0' + digit;
-  char str[2];
-  str[0] = c;
-  str[1] = '\0';
-  print(str, color);
-}
-
-void print_int (int num, char color) {
-  char digits[12];
-  int tmp;
-  int i = 0;
-  while (num != 0) {
-    tmp = num % 10;
-    digits[i] = '0' + tmp;
-    num = num / 10;
-    i++;  
-  }
-  while (i > 0) {
-  i--;  
-  char c = digits[i];
-  char one_char[2] = {c, '\0'};
-  print(one_char, color);
-  }
-}
-
 void clear_screen () {
   for (int i =0; i < 25; i++) {
     for (int j =0; j < 80; j++) {
@@ -65,15 +36,37 @@ void clear_screen () {
   }
   cursor_position = 0;
   current_column = 0;
-
 }
 
+void print_hex(unsigned char val, char color) {
+    const char hex_chars[] = "0123456789ABCDEF";
+    char buf[3];
+    buf[0] = hex_chars[(val >> 4) & 0xF];
+    buf[1] = hex_chars[val & 0xF];
+    buf[2] = '\0';
+    print("0x", color);
+    print(buf, color);
+}
+
+void keyboard_scancode_handler(unsigned char scancode) {
+    print_hex(scancode, 0x0C);
+    print(" ", 0x0C);
+}
 
 void kernel_main() {
   clear_screen();
-  print("Welcome to my Kernel OS!\n", 0x0B);
-  print_digit(7, 0x0B);
-  int num = 123;
-  print_int(num, 0x0B);
-  while (1) {}
+
+  print("Welcome to Sync OS!\n", 0x0B);
+  print("Keyboard scancodes:\n", 0x0B);
+
+  // Kolejność jest istotna: najpierw PIC i IDT, dopiero potem sti.
+  pic_remap();
+  idt_init();                                  // czyści IDT, ustawia gate'y, woła lidt
+  set_keyboard_handler(keyboard_scancode_handler);
+
+  interrupt_enable();
+
+  while (1) {
+    asm volatile ("hlt");
+  }
 }

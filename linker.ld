@@ -17,6 +17,8 @@ SECTIONS
     
     .text.kernel : {
         kernel.o(.text)
+        interrupt.o(.text)
+        interrupt_c.o(.text)
     }
 
     /* Dodanie wildcards (wieloznaczników), by GCC nie zgubiło tekstów i zmiennych z C */
@@ -30,7 +32,11 @@ SECTIONS
         *(.note*)
     }
 
-    . = 0x7C00 + 512 + (16 * 512);
+    _kernel_end = .;
+
+    /* Wymuszamy fizyczny rozmiar pliku binarnego tak, by objąć całe .bss
+       (ktore samo w sobie nie zajmuje miejsca w --oformat binary) plus zapas. */
+    . = _kernel_end + 256;
     .end_marker : {
         BYTE(0)
     }
